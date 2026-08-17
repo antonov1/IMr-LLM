@@ -39,10 +39,7 @@ class Parameters(Enum):
 def apply_bi(logp, logm, parameters: Optional[Dict[Any, Any]] = None, sup= None, ratio = None, size_par = None, rules =None) -> Tuple[PetriNet, Marking, Marking]:
 
     process_tree = apply_tree(logp, logm, parameters, sup=sup, ratio=ratio, size_par=size_par, rules=rules)
-    net, initial_marking, final_marking = tree_to_petri.apply(process_tree)
-
-    return net, initial_marking, final_marking
-
+    return process_tree
 
 
 def apply_tree(logp,logm, parameters=None, sup= None, ratio = None, size_par = None, rules= None):

@@ -1,5 +1,4 @@
 deprecation==2.1.0
 matplotlib==3.9.2
 networkx==3.1
-pm4py==2.2.13.1
-PySimpleGUI==5.0.7
+pm4py==2.7.23.5
