@@ -53,7 +53,7 @@ signal.signal(signal.SIGALRM, timeout_handler)
 
 
 def run_case(eval_id, support):
-    log_path = ARTIFACTS_DIR / f"log_{eval_id}.xes"
+    log_path = ARTIFACTS_DIR /"logs"/ f"log_{eval_id}.xes"
     rules_path = ARTIFACTS_DIR / f"rules_sampled_{eval_id}.txt"
 
     support_label = str(support).replace(".", "_")
