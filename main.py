@@ -13,7 +13,7 @@ from local_pm4py.functions import parse_rules
 import json
 
 SUPPORT_VALUES = [0.25, 0.5, 0.75, 1.0]
-TIMEOUT_SECONDS = 60 * 60
+TIMEOUT_SECONDS = 5 * 60
 
 BASE_DIR = Path(__file__).resolve().parent
 
