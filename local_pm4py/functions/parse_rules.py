@@ -7,7 +7,9 @@ def parse_constraints(file_path):
         'coexistence': [],
         'noncoexistence': [],
         'nonsuccession': [],
-        'responded_existence': []
+        'responded_existence': [],
+        'chainresponse': [],
+        'chainprecedence': []
     }
 
     with open(file_path, 'r') as file:
