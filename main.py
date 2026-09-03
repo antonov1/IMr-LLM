@@ -42,6 +42,8 @@ ALLOWED_TEMPLATES = {
     "noncoexistence",
     "nonsuccession",
     "atmost1",
+    "chainprecedence",
+    "chainresponse"
 }
 
 
