@@ -11,6 +11,8 @@ COEXISTENCE = "coexistence"
 NONCOEXISTENCE = "noncoexistence"
 NONSUCCESSION = "nonsuccession"
 ATMOST_ONE = "atmost1"
+CHAINRESPONSE = "chainresponse"
+CHAINPRECEDENCE = "chainprecedence"
 
 def is_allowed(S1,S2,rules,st_net,en_net):
     exclude = []
