@@ -46,9 +46,14 @@ def parse_constraints(file_path):
                 activities = tuple(activity.strip() for activity in activities)
                 constraints_dict['responded_existence'].append(activities)
             elif line.startswith('ChainResponse'):
-                raise ValueError("Unsupported Rule")
+                activities = line[len('ChainResponse('):-1].split(',')
+                activities = tuple(activity.strip() for activity in activities)
+                constraints_dict['chainresponse'].append(activities)
             elif line.startswith('ChainPrecedence'):
-                raise ValueError("Unsupported Rule")
+                activities = line[len('ChainPrecedence('):-1].split(',')
+                activities = tuple(activity.strip() for activity in activities)
+                constraints_dict['chainprecedence'].append(activities)
+
 
 
     return constraints_dict

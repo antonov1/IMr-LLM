@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+import re
 import signal
 import time
 
@@ -10,20 +12,22 @@ from pm4py.objects.log import obj as log_instance
 
 from local_pm4py import discovery
 from local_pm4py.functions import parse_rules
-import json
 
-SUPPORT_VALUES = [0.25, 0.5, 0.75, 1.0]
-TIMEOUT_SECONDS = 5 * 60
+
+TIMEOUT_SECONDS = 10 * 60  # 10 mins
 
 BASE_DIR = Path(__file__).resolve().parent
 
-ARTIFACTS_DIR = BASE_DIR / "artifacts"
-EXPERIMENTS_DIR = BASE_DIR / "experiments"
+ARTIFACTS_DIR = BASE_DIR / "artifacts-artificial"
+LOGS_DIR = ARTIFACTS_DIR / "logs"
+IDS_FILE = ARTIFACTS_DIR / "ids.json"
+
+EXPERIMENTS_DIR = BASE_DIR / "experiments-artificial"
 MODELS_DIR = EXPERIMENTS_DIR / "models"
 
-IDS_FILE = BASE_DIR / "ids.json"
 RESULTS_FILE = EXPERIMENTS_DIR / "runtimes.csv"
 
+EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -52,14 +56,32 @@ def timeout_handler(signum, frame):
 signal.signal(signal.SIGALRM, timeout_handler)
 
 
-def run_case(eval_id, support):
-    log_path = ARTIFACTS_DIR /"logs"/ f"log_{eval_id}.xes"
-    rules_path = ARTIFACTS_DIR / f"rules_sampled_{eval_id}.txt"
+def parse_trial_id(rules_path: Path):
+    pattern = re.compile(
+        r"^rules_sampled_(?P<trial>\d+)\.txt$"
+    )
 
-    support_label = str(support).replace(".", "_")
-    model_path = MODELS_DIR / f"{eval_id}_imr_sup_{support_label}.ptml"
+    match = pattern.match(rules_path.name)
 
-    print(f"\nRunning id={eval_id}, support={support}...")
+    if match is None:
+        raise ValueError(
+            f"Unexpected rule filename format: {rules_path.name}"
+        )
+
+    return int(match.group("trial"))
+
+
+def run_case(rules_path, sup):
+    trial = parse_trial_id(rules_path)
+
+    log_path = LOGS_DIR / f"log_{trial}.xes"
+    model_path = MODELS_DIR / f"imr_{trial}_sup_{sup:.2f}.ptml"
+
+    print(
+        f"\nRunning "
+        f"trial={trial}, "
+        f"sup={sup:.2f}..."
+    )
 
     try:
         # --------------------------------------------------
@@ -67,31 +89,44 @@ def run_case(eval_id, support):
         # --------------------------------------------------
 
         if not log_path.exists():
-            raise FileNotFoundError(f"Missing log: {log_path}")
+            raise FileNotFoundError(
+                f"Missing log: {log_path}"
+            )
 
         if not rules_path.exists():
-            raise FileNotFoundError(f"Missing rules: {rules_path}")
+            raise FileNotFoundError(
+                f"Missing rules: {rules_path}"
+            )
 
         # --------------------------------------------------
         # Load log
         # --------------------------------------------------
 
-        logP = xes_importer.apply(str(log_path))
+        logP = xes_importer.apply(
+            str(log_path)
+        )
 
         logM = log_instance.EventLog()
-        logM.append(log_instance.Trace())
+        logM.append(
+            log_instance.Trace()
+        )
 
         # --------------------------------------------------
         # Parse rules
         # --------------------------------------------------
 
-        rules = parse_rules.parse_constraints(str(rules_path))
+        rules = parse_rules.parse_constraints(
+            str(rules_path)
+        )
 
         for template in ALLOWED_TEMPLATES:
-            rules.setdefault(template, [])
+            rules.setdefault(
+                template,
+                [],
+            )
 
         # --------------------------------------------------
-        # Discovery with timeout
+        # Discovery
         # --------------------------------------------------
 
         signal.alarm(TIMEOUT_SECONDS)
@@ -101,7 +136,7 @@ def run_case(eval_id, support):
         ptree = discovery.apply_bi(
             logP,
             logM,
-            sup=support,
+            sup=sup,
             ratio=0,
             size_par=len(logP) / max(1, len(logM)),
             rules=rules,
@@ -121,13 +156,17 @@ def run_case(eval_id, support):
         )
 
         print(
-            f"id={eval_id}, support={support}: "
+            f"trial={trial}, "
+            f"sup={sup:.2f}: "
             f"success ({runtime:.2f}s)"
         )
 
         return {
-            "id": eval_id,
-            "support": support,
+            "trial": trial,
+            "support": sup,
+            "rules_file": rules_path.name,
+            "log_file": log_path.name,
+            "model_file": model_path.name,
             "runtime_seconds": runtime,
             "status": "success",
         }
@@ -136,13 +175,17 @@ def run_case(eval_id, support):
         signal.alarm(0)
 
         print(
-            f"id={eval_id}, support={support}: "
+            f"trial={trial}, "
+            f"sup={sup:.2f}: "
             f"invalid rules: {e}"
         )
 
         return {
-            "id": eval_id,
-            "support": support,
+            "trial": trial,
+            "support": sup,
+            "rules_file": rules_path.name,
+            "log_file": log_path.name,
+            "model_file": model_path.name,
             "runtime_seconds": None,
             "status": "invalid_rules",
         }
@@ -151,13 +194,17 @@ def run_case(eval_id, support):
         signal.alarm(0)
 
         print(
-            f"id={eval_id}, support={support}: "
-            f"timeout after 60 minutes"
+            f"trial={trial}, "
+            f"sup={sup:.2f}: "
+            f"timeout after {TIMEOUT_SECONDS / 60:.0f} minutes"
         )
 
         return {
-            "id": eval_id,
-            "support": support,
+            "trial": trial,
+            "support": sup,
+            "rules_file": rules_path.name,
+            "log_file": log_path.name,
+            "model_file": model_path.name,
             "runtime_seconds": TIMEOUT_SECONDS,
             "status": "timeout",
         }
@@ -166,33 +213,191 @@ def run_case(eval_id, support):
         signal.alarm(0)
 
         print(
-            f"id={eval_id}, support={support}: "
+            f"trial={trial}, "
+            f"sup={sup:.2f}: "
             f"error: {e}"
         )
 
         return {
-            "id": eval_id,
-            "support": support,
+            "trial": trial,
+            "support": sup,
+            "rules_file": rules_path.name,
+            "log_file": log_path.name,
+            "model_file": model_path.name,
             "runtime_seconds": None,
             "status": f"error: {e}",
         }
 
 
-def main(ids):
+def main():
     results = []
 
-    for eval_id in ids:
-        for support in SUPPORT_VALUES:
-            result = run_case(eval_id, support)
-            results.append(result)
+    # --------------------------------------------------
+    # Find rule files directly from their names
+    # --------------------------------------------------
 
-            # Checkpoint after every run
-            pd.DataFrame(results).to_csv(
+    rules_files = sorted(
+        ARTIFACTS_DIR.glob("rules_sampled_*.txt"),
+        key=parse_trial_id,
+    )
+
+    if len(rules_files) != 100:
+        raise RuntimeError(
+            f"Expected exactly 100 rule files, "
+            f"but found {len(rules_files)} in {ARTIFACTS_DIR}"
+        )
+
+    print("Found exactly 100 rule files.")
+
+    # --------------------------------------------------
+    # Check corresponding logs
+    # --------------------------------------------------
+
+    missing_logs = []
+
+    for rules_path in rules_files:
+        trial = parse_trial_id(rules_path)
+        log_path = LOGS_DIR / f"log_{trial}.xes"
+
+        if not log_path.exists():
+            missing_logs.append(log_path)
+
+    if missing_logs:
+        missing_names = "\n".join(
+            str(path)
+            for path in missing_logs
+        )
+
+        raise FileNotFoundError(
+            f"Missing {len(missing_logs)} corresponding log files:\n"
+            f"{missing_names}"
+        )
+
+    print("All 100 corresponding log files exist.")
+
+    # --------------------------------------------------
+    # Run both support settings
+    # --------------------------------------------------
+
+    supports = [
+        1.00,
+        0.80,
+    ]
+
+    for sup in supports:
+        print(
+            f"\n{'=' * 60}\n"
+            f"Running support={sup:.2f}\n"
+            f"{'=' * 60}"
+        )
+
+        for rules_path in rules_files:
+            result = run_case(
+                rules_path,
+                sup,
+            )
+
+            results.append(
+                result
+            )
+
+            pd.DataFrame(
+                results
+            ).to_csv(
                 RESULTS_FILE,
                 index=False,
             )
 
-    df = pd.DataFrame(results)
+    # --------------------------------------------------
+    # Final results
+    # --------------------------------------------------
+
+    df = pd.DataFrame(
+        results
+    )
+
+    if not df.empty:
+        df = (
+            df
+            .sort_values(
+                [
+                    "support",
+                    "trial",
+                ],
+                ascending=[
+                    False,
+                    True,
+                ],
+            )
+            .reset_index(drop=True)
+        )
+
+    df.to_csv(
+        RESULTS_FILE,
+        index=False,
+    )
+
+    print("\nResults:")
+    print(df)
+
+    return df
+
+def main():
+    results = []
+
+    rules_files = sorted(
+        ARTIFACTS_DIR.glob("rules_sampled_*.txt"),
+        key=parse_trial_id,
+    )
+
+    if len(rules_files) != 100:
+        raise RuntimeError(
+            f"Expected exactly 100 rule files, "
+            f"but found {len(rules_files)}."
+        )
+
+    print(f"Found exactly {len(rules_files)} rule files.")
+
+    supports = [1.00, 0.80]
+
+    for sup in supports:
+        print(f"\nRunning experiments with support={sup:.2f}")
+
+        for rules_path in rules_files:
+            result = run_case(
+                rules_path,
+                sup,
+            )
+
+            results.append(
+                result
+            )
+
+            pd.DataFrame(
+                results
+            ).to_csv(
+                RESULTS_FILE,
+                index=False,
+            )
+
+    df = pd.DataFrame(
+        results
+    )
+
+    if not df.empty:
+        df = (
+            df
+            .sort_values(
+                ["support", "trial"],
+                ascending=[False, True],
+            )
+            .reset_index(drop=True)
+        )
+
+    df.to_csv(
+        RESULTS_FILE,
+        index=False,
+    )
 
     print("\nResults:")
     print(df)
@@ -201,11 +406,4 @@ def main(ids):
 
 
 if __name__ == "__main__":
-    with open(IDS_FILE, "r") as f:
-        ids = json.load(f)
-
-    ids = [str(eval_id) for eval_id in ids]
-
-    print(f"Loaded {len(ids)} IDs from {IDS_FILE}")
-
-    results = main(ids)
+    results = main()

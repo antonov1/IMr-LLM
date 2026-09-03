@@ -588,6 +588,52 @@ def is_allowed(S1,S2,rules,st_net,en_net):
                 exclude.append('exc')
                 exclude.append('par')
                 exclude.append('loop')
+                
+    # CHAIN RESPONSE:
+    # CHAINRESPONSE(A, B): every A must be immediately followed by B
+    for r in rules[CHAINRESPONSE]:
+        a, b = r
+
+        if a in S1 and b in S2:
+            # A -> B can potentially be represented by a sequence cut.
+            # XOR, parallel and loop do not guarantee immediate adjacency.
+            n_conf += 1
+            exclude.append('exc')
+            exclude.append('par')
+            exclude.append('loop')
+
+        elif a in S2 and b in S1:
+            # Wrong ordering for a sequence cut.
+            n_conf += 1
+            exclude.append('exc')
+            exclude.append('seq')
+            exclude.append('par')
+            exclude.append('loop')
+
+            # Further expansion of S1 will not repair the ordering
+            # in the same way as RESPONSE in your current implementation.
+            block = True
+
+
+    for r in rules[CHAINPRECEDENCE]:
+        a, b = r
+
+        if a in S1 and b in S2:
+            # A before B is the only compatible cross-partition direction.
+            n_conf += 1
+            exclude.append('exc')
+            exclude.append('par')
+            exclude.append('loop')
+
+        elif a in S2 and b in S1:
+            # B occurs in the first partition while its required
+            # immediate predecessor A is in the second partition.
+            n_conf += 1
+            exclude.append('exc')
+            exclude.append('seq')
+            exclude.append('par')
+            exclude.append('loop')
+            block = True
 
 
 
